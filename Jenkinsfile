@@ -3,22 +3,32 @@ pipeline {
 
     environment {
         PROJECT_DIR = "C:\\Users\\Dell-Lap\\Downloads\\login360ui"
-        TOMCAT_DIR = "C:\\Program Files\\Apache Software Foundation\\Tomcat 9.0\\work"
+        TOMCAT_DIR = "C:\\Program Files\\Apache Software Foundation\\Tomcat 9.0\\webapps"
         APP_NAME = "login"
     }
 
     stages {
+        stage('Clean Workspace') {
+            steps {
+                cleanWs() // Cleans up the workspace
+            }
+        }
+
         stage('Checkout SCM') {
             steps {
-                git credentialsId: 'muthu512', url: 'https://github.com/muthu512/update_tomcat.git', branch: 'master'
+                script {
+                    git credentialsId: 'muthu512', url: 'https://github.com/muthu512/update_tomcat.git', branch: 'master'
+                    bat 'git fetch --all && git reset --hard origin/master'
+                    bat 'git log -1' // Log the latest commit hash
+                }
             }
         }
 
         stage('Check Node and npm Versions') {
             steps {
                 script {
-                    bat 'node -v'
-                    bat 'npm -v'
+                    bat 'node -v || exit 1'
+                    bat 'npm -v || exit 1'
                 }
             }
         }
@@ -55,22 +65,41 @@ pipeline {
             steps {
                 script {
                     dir(PROJECT_DIR) {
-                        // Set NODE_OPTIONS to use legacy OpenSSL provider for the build
-                        bat 'set NODE_OPTIONS=--openssl-legacy-provider && npm run build'
+                        // Build the React app
+                        bat 'set NODE_OPTIONS=--openssl-legacy-provider && npm run build || exit 1'
+
+                        // Validate build directory
+                        bat "if exist build (echo Build directory exists) else (echo Build directory does not exist && exit 1)"
+                        bat "dir \"${PROJECT_DIR}\\build\"" // Log build directory content
                     }
                 }
             }
         }
 
-        stage('Deploy to Tomcat') { // Fixed typo here
+        stage('Deploy to Tomcat') {
             steps {
                 script {
-                    bat "if not exist \"${PROJECT_DIR}\\build\" (echo Build directory does not exist && exit 1)"
-                    bat "dir \"${PROJECT_DIR}\\build\""
-                    bat "if not exist \"${PROJECT_DIR}\\build\\*\" (echo No files in build directory && exit 1)"
-                    bat "if not exist \"${TOMCAT_DIR}\\${APP_NAME}\" mkdir \"${TOMCAT_DIR}\\${APP_NAME}\""
-                    bat "xcopy /S /I /Y \"${PROJECT_DIR}\\build\\*\" \"${TOMCAT_DIR}\\${APP_NAME}\\\""
-                    bat "dir \"${TOMCAT_DIR}\\${APP_NAME}\""
+                    // Check if the build directory exists
+                    bat """
+                    if not exist "${env.PROJECT_DIR}\\build" (
+                        echo Build directory does not exist && exit 1
+                    )
+                    if not exist "${env.PROJECT_DIR}\\build\\*" (
+                        echo No files in build directory && exit 1
+                    )
+                    """
+
+                    // Check and remove the old deployment directory
+                    bat """
+                    if exist "${env.TOMCAT_DIR}\\${env.APP_NAME}" (
+                        rmdir /S /Q "${env.TOMCAT_DIR}\\${env.APP_NAME}"
+                    )
+                    """
+
+                    // Copy new build to Tomcat
+                    bat """
+                    xcopy /E /I /Y "${env.PROJECT_DIR}\\build" "${env.TOMCAT_DIR}\\${env.APP_NAME}"
+                    """
                 }
             }
         }
