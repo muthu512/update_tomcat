@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        PROJECT_DIR = "C:\\Users\\Dell-Lap\\Documents\\login360ui"
+        PROJECT_DIR = "C:\\Users\\Dell-Lap\\Downloads\\login360ui"
         TOMCAT_DIR = "C:\\Program Files\\Apache Software Foundation\\Tomcat 9.0\\webapps"
         APP_NAME = "login"
     }
